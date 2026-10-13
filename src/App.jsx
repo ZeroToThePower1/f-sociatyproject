@@ -10,6 +10,19 @@ import ProfileForm from './components/ProfileForm';
 import DemoProfiles from './components/DemoProfiles';
 import CourseDetailsModal from './components/CourseDetailsModal';
 
+// Auth screens
+import Login from './components/Login';
+import Signup from './components/Signup';
+import ForgotPassword from './components/ForgotPassword';
+
+// Auth service
+import {
+  login as authLogin,
+  signup as authSignup,
+  logout as authLogout,
+  getCurrentUser
+} from './utils/authService';
+
 import { COURSES, DEMO_PROFILES } from './data/courses';
 import { getRecommendedCourses } from './utils/recommendationEngine';
 import { CheckCircle2, AlertCircle, Info, Sparkles, X } from './components/icons';
@@ -20,11 +33,30 @@ const PROGRESS_STORAGE_PREFIX = 'skillpath_progress_';
 const ACTIVE_PROFILE_KEY = 'skillpath_active_profile';
 
 export default function App() {
-  // 1. Navigation state ('dashboard' | 'explore' | 'mylearning' | 'roadmap' | 'profile')
-  const [currentView, setCurrentView] = useState('dashboard');
+  // -------------------------------------------------------------------------
+  // Navigation
+  // -------------------------------------------------------------------------
+  // Values: 'login' | 'signup' | 'forgot-password' |
+  //         'dashboard' | 'explore' | 'mylearning' | 'roadmap' | 'profile'
+  const [currentView, setCurrentView] = useState(() => {
+    // If a session already exists, skip login and go straight to dashboard
+    return getCurrentUser() ? 'dashboard' : 'login';
+  });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // 2. Active demo profile state ('profileA' | 'profileB')
+  const isAuthView =
+    currentView === 'login' ||
+    currentView === 'signup' ||
+    currentView === 'forgot-password';
+
+  // -------------------------------------------------------------------------
+  // Logged-in user
+  // -------------------------------------------------------------------------
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+
+  // -------------------------------------------------------------------------
+  // Active demo profile
+  // -------------------------------------------------------------------------
   const [activeProfileKey, setActiveProfileKey] = useState(() => {
     try {
       const saved = localStorage.getItem(ACTIVE_PROFILE_KEY);
@@ -34,7 +66,9 @@ export default function App() {
     }
   });
 
-  // 3. User Preferences state for active profile
+  // -------------------------------------------------------------------------
+  // Preferences
+  // -------------------------------------------------------------------------
   const [preferences, setPreferences] = useState(() => {
     try {
       const defaultProfile = DEMO_PROFILES.profileA;
@@ -54,14 +88,14 @@ export default function App() {
     }
   });
 
-  // 4. Progress map state for active profile
-  // format: { [courseId]: { status: 'completed' | 'in-progress' | 'not-started', progress: 0-100 } }
+  // -------------------------------------------------------------------------
+  // Progress map
+  // -------------------------------------------------------------------------
   const [progressMap, setProgressMap] = useState(() => {
     try {
       const saved = localStorage.getItem(`${PROGRESS_STORAGE_PREFIX}profileA`);
       if (saved) return JSON.parse(saved);
 
-      // Default Profile A initial progress
       const initial = {};
       DEMO_PROFILES.profileA.initialCompletedCourses.forEach((id) => {
         initial[id] = { status: 'completed', progress: 100 };
@@ -78,10 +112,14 @@ export default function App() {
     }
   });
 
-  // 5. Selected course for details modal
+  // -------------------------------------------------------------------------
+  // Selected course (modal)
+  // -------------------------------------------------------------------------
   const [selectedCourse, setSelectedCourse] = useState(null);
 
-  // 6. Toast notification state
+  // -------------------------------------------------------------------------
+  // Toast
+  // -------------------------------------------------------------------------
   const [toast, setToast] = useState(null);
 
   const showToast = useCallback((message, type = 'success') => {
@@ -91,14 +129,40 @@ export default function App() {
     }, 3500);
   }, []);
 
-  // Sync active profile selection changes
+  // -------------------------------------------------------------------------
+  // Auth handlers
+  // -------------------------------------------------------------------------
+  const handleLogin = async ({ email, password, rememberMe }) => {
+    // authLogin throws on failure, which Login.js catches and displays.
+    const user = await authLogin({ email, password });
+    setCurrentUser(user);
+    showToast(`Welcome back, ${user.fullName || user.email}!`, 'success');
+    setCurrentView('dashboard');
+  };
+
+  const handleSignup = async ({ fullName, email, password }) => {
+    // authSignup throws on failure, which Signup.js catches and displays.
+    const user = await authSignup({ fullName, email, password });
+    showToast(`Account created for ${user.fullName || email}. Please log in.`, 'success');
+    setCurrentView('login');
+  };
+
+  const handleLogout = () => {
+    authLogout();
+    setCurrentUser(null);
+    showToast('Logged out.', 'info');
+    setCurrentView('login');
+  };
+
+  // -------------------------------------------------------------------------
+  // Profile / preference handlers
+  // -------------------------------------------------------------------------
   const switchProfile = (profileKey) => {
     try {
       const preset = DEMO_PROFILES[profileKey] || DEMO_PROFILES.profileA;
       setActiveProfileKey(profileKey);
       localStorage.setItem(ACTIVE_PROFILE_KEY, profileKey);
 
-      // Load preferences for this profile
       const savedPrefs = localStorage.getItem(`${PREFS_STORAGE_PREFIX}${profileKey}`);
       if (savedPrefs) {
         setPreferences(JSON.parse(savedPrefs));
@@ -112,7 +176,6 @@ export default function App() {
         localStorage.setItem(`${PREFS_STORAGE_PREFIX}${profileKey}`, JSON.stringify(defaultPrefs));
       }
 
-      // Load progress for this profile
       const savedProgress = localStorage.getItem(`${PROGRESS_STORAGE_PREFIX}${profileKey}`);
       if (savedProgress) {
         setProgressMap(JSON.parse(savedProgress));
@@ -131,13 +194,15 @@ export default function App() {
         );
       }
 
-      showToast(`Switched to ${preset.name} (${profileKey === 'profileA' ? 'Profile A' : 'Profile B'})`, 'info');
+      showToast(
+        `Switched to ${preset.name} (${profileKey === 'profileA' ? 'Profile A' : 'Profile B'})`,
+        'info'
+      );
     } catch (e) {
       console.error('Error switching profile:', e);
     }
   };
 
-  // Save preferences and persist in localStorage
   const handleSavePreferences = (newPrefs) => {
     setPreferences(newPrefs);
     try {
@@ -151,7 +216,6 @@ export default function App() {
     }
   };
 
-  // Reset current profile to default configuration
   const handleResetDemo = () => {
     try {
       const preset = DEMO_PROFILES[activeProfileKey] || DEMO_PROFILES.profileA;
@@ -182,19 +246,24 @@ export default function App() {
     }
   };
 
-  // Update a course status ('not-started' | 'in-progress' | 'completed')
+  // -------------------------------------------------------------------------
+  // Progress handlers
+  // -------------------------------------------------------------------------
   const handleUpdateStatus = (courseId, nextStatus) => {
     setProgressMap((prev) => {
       const current = prev[courseId] || { status: 'not-started', progress: 0 };
       const nextProgress =
-        nextStatus === 'completed' ? 100 : nextStatus === 'in-progress' ? (current.progress > 0 ? current.progress : 40) : 0;
+        nextStatus === 'completed'
+          ? 100
+          : nextStatus === 'in-progress'
+          ? current.progress > 0
+            ? current.progress
+            : 40
+          : 0;
 
       const updated = {
         ...prev,
-        [courseId]: {
-          status: nextStatus,
-          progress: nextProgress
-        }
+        [courseId]: { status: nextStatus, progress: nextProgress }
       };
 
       try {
@@ -218,29 +287,25 @@ export default function App() {
       return updated;
     });
 
-    // Also update selectedCourse if modal is open
     setSelectedCourse((prev) => {
       if (prev && prev.id === courseId) {
         return {
           ...prev,
           status: nextStatus,
-          progressPercent: nextStatus === 'completed' ? 100 : nextStatus === 'in-progress' ? 40 : 0
+          progressPercent:
+            nextStatus === 'completed' ? 100 : nextStatus === 'in-progress' ? 40 : 0
         };
       }
       return prev;
     });
   };
 
-  // Update custom progress percentage
   const handleUpdateCourseProgress = (courseId, percentage) => {
     setProgressMap((prev) => {
       const nextStatus = percentage >= 100 ? 'completed' : 'in-progress';
       const updated = {
         ...prev,
-        [courseId]: {
-          status: nextStatus,
-          progress: percentage
-        }
+        [courseId]: { status: nextStatus, progress: percentage }
       };
 
       try {
@@ -256,18 +321,18 @@ export default function App() {
     });
   };
 
-  // Compute recommended courses dynamically whenever COURSES, preferences, or progressMap changes
+  // -------------------------------------------------------------------------
+  // Derived data
+  // -------------------------------------------------------------------------
   const enrichedCourses = useMemo(() => {
     return getRecommendedCourses(COURSES, preferences, progressMap);
   }, [preferences, progressMap]);
 
-  // Keep selectedCourse updated if underlying data changes
   const activeSelectedCourse = useMemo(() => {
     if (!selectedCourse) return null;
     return enrichedCourses.find((c) => c.id === selectedCourse.id) || selectedCourse;
   }, [selectedCourse, enrichedCourses]);
 
-  // Stats counters
   const completedCount = useMemo(() => {
     return Object.keys(progressMap).filter(
       (id) => progressMap[id]?.status === 'completed'
@@ -280,9 +345,12 @@ export default function App() {
     ).length;
   }, [progressMap]);
 
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased selection:bg-purple-100 selection:text-purple-900">
-      {/* Toast Notification Container */}
+      {/* Toast Notification */}
       {toast && (
         <div
           className={`fixed bottom-6 right-6 z-50 p-4 rounded-2xl shadow-xl flex items-center gap-3 max-w-md border transition-all animate-in slide-in-from-bottom-5 ${
@@ -311,31 +379,55 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Navbar */}
-      <Navbar
-        currentView={currentView}
-        onNavigate={setCurrentView}
-        activeProfileKey={activeProfileKey}
-        onSwitchProfile={switchProfile}
-        preferences={preferences}
-        isMobileMenuOpen={isMobileMenuOpen}
-        setIsMobileMenuOpen={setIsMobileMenuOpen}
-      />
-
-      <div className="flex-1 flex max-w-7xl w-full mx-auto">
-        {/* Desktop Sidebar */}
-        <Sidebar
+      {/* Top Navbar (hidden on auth screens) */}
+      {!isAuthView && (
+        <Navbar
           currentView={currentView}
           onNavigate={setCurrentView}
           activeProfileKey={activeProfileKey}
+          onSwitchProfile={switchProfile}
           preferences={preferences}
-          completedCount={completedCount}
-          inProgressCount={inProgressCount}
-          totalCourses={COURSES.length}
+          isMobileMenuOpen={isMobileMenuOpen}
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
+          currentUser={currentUser}
+          onLogout={handleLogout}
         />
+      )}
 
-        {/* Main Content Area */}
+      <div className="flex-1 flex max-w-7xl w-full mx-auto">
+        {/* Desktop Sidebar (hidden on auth screens) */}
+        {!isAuthView && (
+          <Sidebar
+            currentView={currentView}
+            onNavigate={setCurrentView}
+            activeProfileKey={activeProfileKey}
+            preferences={preferences}
+            completedCount={completedCount}
+            inProgressCount={inProgressCount}
+            totalCourses={COURSES.length}
+          />
+        )}
+
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          {/* -------------------- AUTH VIEWS -------------------- */}
+          {currentView === 'login' && (
+            <Login onLogin={handleLogin} onNavigate={setCurrentView} />
+          )}
+
+          {currentView === 'signup' && (
+            <Signup onSignup={handleSignup} onNavigate={setCurrentView} />
+          )}
+
+          {currentView === 'forgot-password' && (
+            <ForgotPassword
+              onNavigate={setCurrentView}
+              onResetSuccess={(email) => {
+                showToast(`Password reset for ${email}.`, 'info');
+              }}
+            />
+          )}
+
+          {/* -------------------- APP VIEWS -------------------- */}
           {currentView === 'dashboard' && (
             <Dashboard
               preferences={preferences}
@@ -408,69 +500,73 @@ export default function App() {
         />
       )}
 
-      {/* Compact Mobile Bottom Navigation */}
-      <nav
-        className="lg:hidden sticky bottom-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 py-2 px-4 flex items-center justify-around shadow-lg"
-        aria-label="Mobile Bottom Navigation"
-      >
-        <button
-          onClick={() => setCurrentView('dashboard')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
-            currentView === 'dashboard' ? 'text-purple-600' : 'text-slate-500'
-          }`}
+      {/* Mobile Bottom Nav (hidden on auth screens) */}
+      {!isAuthView && (
+        <nav
+          className="lg:hidden sticky bottom-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 py-2 px-4 flex items-center justify-around shadow-lg"
+          aria-label="Mobile Bottom Navigation"
         >
-          <Sparkles size={18} />
-          <span>Home</span>
-        </button>
+          <button
+            onClick={() => setCurrentView('dashboard')}
+            className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
+              currentView === 'dashboard' ? 'text-purple-600' : 'text-slate-500'
+            }`}
+          >
+            <Sparkles size={18} />
+            <span>Home</span>
+          </button>
 
-        <button
-          onClick={() => setCurrentView('explore')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
-            currentView === 'explore' ? 'text-purple-600' : 'text-slate-500'
-          }`}
-        >
-          <CourseGridIcon />
-          <span>Courses</span>
-        </button>
+          <button
+            onClick={() => setCurrentView('explore')}
+            className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
+              currentView === 'explore' ? 'text-purple-600' : 'text-slate-500'
+            }`}
+          >
+            <CourseGridIcon />
+            <span>Courses</span>
+          </button>
 
-        <button
-          onClick={() => setCurrentView('mylearning')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-bold relative ${
-            currentView === 'mylearning' ? 'text-purple-600' : 'text-slate-500'
-          }`}
-        >
-          <BookOpenIcon />
-          <span>Learning</span>
-          {inProgressCount > 0 && (
-            <span className="absolute -top-1 right-2 w-2 h-2 rounded-full bg-purple-600" />
-          )}
-        </button>
+          <button
+            onClick={() => setCurrentView('mylearning')}
+            className={`flex flex-col items-center gap-1 text-[11px] font-bold relative ${
+              currentView === 'mylearning' ? 'text-purple-600' : 'text-slate-500'
+            }`}
+          >
+            <BookOpenIcon />
+            <span>Learning</span>
+            {inProgressCount > 0 && (
+              <span className="absolute -top-1 right-2 w-2 h-2 rounded-full bg-purple-600" />
+            )}
+          </button>
 
-        <button
-          onClick={() => setCurrentView('roadmap')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
-            currentView === 'roadmap' ? 'text-purple-600' : 'text-slate-500'
-          }`}
-        >
-          <RoadmapIcon />
-          <span>Roadmap</span>
-        </button>
+          <button
+            onClick={() => setCurrentView('roadmap')}
+            className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
+              currentView === 'roadmap' ? 'text-purple-600' : 'text-slate-500'
+            }`}
+          >
+            <RoadmapIcon />
+            <span>Roadmap</span>
+          </button>
 
-        <button
-          onClick={() => setCurrentView('profile')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
-            currentView === 'profile' ? 'text-purple-600' : 'text-slate-500'
-          }`}
-        >
-          <UserIcon />
-          <span>Profile</span>
-        </button>
-      </nav>
+          <button
+            onClick={() => setCurrentView('profile')}
+            className={`flex flex-col items-center gap-1 text-[11px] font-bold ${
+              currentView === 'profile' ? 'text-purple-600' : 'text-slate-500'
+            }`}
+          >
+            <UserIcon />
+            <span>Profile</span>
+          </button>
+        </nav>
+      )}
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
 // Mini SVG icons for mobile bottom bar
+// ---------------------------------------------------------------------------
 function CourseGridIcon() {
   return (
     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
