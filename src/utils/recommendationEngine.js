@@ -1,381 +1,240 @@
+// /client/src/utils/recommendationEngine.js
+
 /**
- * SkillPath Smart Recommendation Engine
- * Deterministic scoring algorithm adhering to:
- * - Interest match: 40%
- * - Skill match: 30%
- * - Difficulty suitability: 15%
- * - Weekly time compatibility: 15%
+ * CourseCompass Recommendation Engine
+ * -----------------------------------
+ * Inputs:
+ *   courses      : Array of course objects (from Supabase via db.js)
+ *   preferences  : { interests: string[], skills: string[], studyHours: number }
+ *   progressMap  : { [courseId]: { status: 'not-started'|'in-progress'|'completed', progress: number } }
  *
- * Enforces strict prerequisite dependency resolution:
- * - CSS requires HTML
- * - JavaScript requires HTML
- * - React requires JavaScript
- * - DSA requires either C Fundamentals OR Python Programming
+ * Output:
+ *   Array of enriched courses with:
+ *     - score, personalizedReason, readiness
+ *     - prereqCheck { isSatisfied, warningText }
+ *     - estimatedWeeks, scoreBreakdown
+ *     - status (from progressMap)
  */
+
+const WEEKLY_HOURS_DEFAULT = 5;
+
+// Weights
+const WEIGHT_INTEREST = 40;
+const WEIGHT_SKILL = 30;
+const WEIGHT_DIFFICULTY = 15;
+const WEIGHT_TIME = 15;
 
 /**
- * Validates prerequisite conditions for a course against user's completed courses
- * @param {Object} course - The course object
- * @param {Array<string>} completedCourseIds - Array of completed course IDs
- * @param {Array<Object>} allCourses - Full list of courses for title lookup
- * @returns {Object} { isSatisfied, missingCourseIds, missingCourseTitles, warningText }
+ * Difficulty ordering
  */
-export function checkPrerequisites(course, completedCourseIds = [], allCourses = []) {
-  const completedSet = new Set(completedCourseIds);
-  const prereqs = course.prerequisites;
+const DIFFICULTY_RANK = {
+  Beginner: 1,
+  Intermediate: 2,
+  Advanced: 3,
+};
 
-  // No prerequisites needed
-  if (!prereqs || (Array.isArray(prereqs) && prereqs.length === 0)) {
-    return {
-      isSatisfied: true,
-      missingCourseIds: [],
-      missingCourseTitles: [],
-      warningText: ''
-    };
-  }
+/**
+ * Infer student's current level from known skills count
+ */
+function inferStudentLevel(skills = []) {
+  const n = skills.length;
+  if (n <= 2) return 'Beginner';
+  if (n <= 5) return 'Intermediate';
+  return 'Advanced';
+}
 
-  // Handle alternative prerequisites: e.g. DSA requires C OR Python
-  if (typeof prereqs === 'object' && !Array.isArray(prereqs) && prereqs.type === 'OR') {
-    const hasAny = prereqs.options.some((optId) => completedSet.has(optId));
-    if (hasAny) {
-      return {
-        isSatisfied: true,
-        missingCourseIds: [],
-        missingCourseTitles: [],
-        warningText: ''
-      };
+/**
+ * 1. INTEREST MATCH (0-40)
+ */
+function scoreInterest(course, interests = []) {
+  if (!interests.length) return 0;
+  const courseTopic = (course.category || course.topic || '').toLowerCase();
+  const tags = (course.tags || []).map((t) => t.toLowerCase());
+
+  for (const intr of interests) {
+    const i = intr.toLowerCase();
+    if (courseTopic === i) return WEIGHT_INTEREST; // exact topic match
+    if (courseTopic.includes(i) || i.includes(courseTopic)) return WEIGHT_INTEREST * 0.8;
+    if (tags.some((t) => t === i || t.includes(i) || i.includes(t))) {
+      return WEIGHT_INTEREST * 0.6;
     }
-
-    const missingTitles = prereqs.options.map((id) => {
-      const found = allCourses.find((c) => c.id === id);
-      return found ? found.title : id;
-    });
-
-    return {
-      isSatisfied: false,
-      missingCourseIds: prereqs.options,
-      missingCourseTitles: missingTitles,
-      warningText: `Requires either "${missingTitles.join('" OR "')}"`
-    };
   }
+  return 0;
+}
 
-  // Standard array of prerequisite course IDs: e.g. CSS requires HTML, React requires JS
-  if (Array.isArray(prereqs)) {
-    const missing = prereqs.filter((id) => !completedSet.has(id));
-    if (missing.length === 0) {
-      return {
-        isSatisfied: true,
-        missingCourseIds: [],
-        missingCourseTitles: [],
-        warningText: ''
-      };
+/**
+ * 2. SKILL MATCH (0-30)
+ * Fraction of required skills the student already knows
+ */
+function scoreSkill(course, knownSkills = []) {
+  const required = course.requiredSkills || [];
+  if (!required.length) return WEIGHT_SKILL * 0.5; // no prereq → partial credit
+  const known = new Set(knownSkills.map((s) => s.toLowerCase()));
+  let matched = 0;
+  required.forEach((r) => {
+    if (known.has(r.toLowerCase())) matched++;
+  });
+  return (matched / required.length) * WEIGHT_SKILL;
+}
+
+/**
+ * 3. DIFFICULTY FIT (0-15)
+ */
+function scoreDifficulty(course, studentLevel) {
+  const cRank = DIFFICULTY_RANK[course.difficulty] || 1;
+  const sRank = DIFFICULTY_RANK[studentLevel] || 1;
+
+  if (cRank === sRank) return WEIGHT_DIFFICULTY;
+  if (cRank === sRank + 1) return WEIGHT_DIFFICULTY * 0.6; // slightly harder → OK
+  if (cRank < sRank) return WEIGHT_DIFFICULTY * 0.4; // too easy
+  return 0; // way too hard
+}
+
+/**
+ * 4. TIME FIT (0-15)
+ * Course should be completable within ~4 weeks at student's pace
+ */
+function scoreTime(course, studyHours = WEEKLY_HOURS_DEFAULT) {
+  const totalHours = course.totalHours || course.durationHours || 0;
+  if (!totalHours || !studyHours) return WEIGHT_TIME * 0.5;
+  const weeksNeeded = totalHours / studyHours;
+  if (weeksNeeded <= 4) return WEIGHT_TIME;
+  if (weeksNeeded <= 8) return WEIGHT_TIME * 0.6;
+  if (weeksNeeded <= 12) return WEIGHT_TIME * 0.3;
+  return 0;
+}
+
+/**
+ * Build human-readable reason from top scoring factor
+ */
+function buildReason(course, breakdown, preferences) {
+  const { interestScore, skillScore, difficultyScore, timeScore } = breakdown;
+  const reasons = [];
+
+  if (interestScore >= WEIGHT_INTEREST * 0.8) {
+    reasons.push(`Matches your interest in ${course.category || course.topic}.`);
+  }
+  if (skillScore >= WEIGHT_SKILL * 0.5 && (course.requiredSkills || []).length) {
+    const matched = (course.requiredSkills || []).filter((r) =>
+      (preferences.skills || [])
+        .map((s) => s.toLowerCase())
+        .includes(r.toLowerCase())
+    );
+    if (matched.length) {
+      const pct = Math.round(
+        (matched.length / course.requiredSkills.length) * 100
+      );
+      reasons.push(
+        `You already know ${matched.join(', ')} — you're ${pct}% ready.`
+      );
     }
-
-    const missingTitles = missing.map((id) => {
-      const found = allCourses.find((c) => c.id === id);
-      return found ? found.title : id;
-    });
-
-    return {
-      isSatisfied: false,
-      missingCourseIds: missing,
-      missingCourseTitles: missingTitles,
-      warningText: `Requires completion of: ${missingTitles.join(', ')}`
-    };
+  }
+  if (timeScore >= WEIGHT_TIME * 0.8) {
+    reasons.push(
+      `Fits your ${preferences.studyHours || WEEKLY_HOURS_DEFAULT} hrs/week schedule.`
+    );
+  }
+  if (difficultyScore >= WEIGHT_DIFFICULTY * 0.8) {
+    reasons.push(`Perfect difficulty match for your current level.`);
   }
 
+  if (!reasons.length) {
+    reasons.push('Solid foundational course to broaden your skills.');
+  }
+
+  return reasons.slice(0, 2).join(' ');
+}
+
+/**
+ * Check if prerequisites are satisfied
+ * course.prerequisiteId → parent course
+ */
+function checkPrerequisites(course, allCourses, progressMap) {
+  const prereqId = course.prerequisiteId;
+  if (!prereqId) {
+    return { isSatisfied: true, warningText: '' };
+  }
+
+  const prereqCourse = allCourses.find((c) => c.id === prereqId);
+  const prereqStatus = progressMap[prereqId]?.status;
+
+  if (prereqStatus === 'completed') {
+    return { isSatisfied: true, warningText: '' };
+  }
+
+  const prereqTitle = prereqCourse?.title || 'the prerequisite course';
   return {
-    isSatisfied: true,
-    missingCourseIds: [],
-    missingCourseTitles: [],
-    warningText: ''
+    isSatisfied: false,
+    warningText: `Complete "${prereqTitle}" first to unlock this course.`,
   };
 }
 
 /**
- * Returns the exact readiness status of a course:
- * "Completed", "In Progress", "Ready to Start", or "Prerequisite Required"
+ * MAIN FUNCTION
  */
-export function getCourseReadiness(course, progressStatus = 'not-started', completedCourseIds = [], allCourses = []) {
-  if (progressStatus === 'completed') {
-    return 'Completed';
-  }
-  if (progressStatus === 'in-progress') {
-    return 'In Progress';
-  }
+export function getRecommendedCourses(
+  courses = [],
+  preferences = {},
+  progressMap = {}
+) {
+  const interests = preferences.interests || [];
+  const knownSkills = preferences.skills || [];
+  const studyHours = preferences.studyHours || WEEKLY_HOURS_DEFAULT;
+  const studentLevel = inferStudentLevel(knownSkills);
 
-  // Not started: check prerequisites
-  const prereqCheck = checkPrerequisites(course, completedCourseIds, allCourses);
-  if (prereqCheck.isSatisfied) {
-    return 'Ready to Start';
-  }
+  const enriched = courses.map((course) => {
+    const interestScore = scoreInterest(course, interests);
+    const skillScore = scoreSkill(course, knownSkills);
+    const difficultyScore = scoreDifficulty(course, studentLevel);
+    const timeScore = scoreTime(course, studyHours);
 
-  return 'Prerequisite Required';
-}
+    const rawScore =
+      interestScore + skillScore + difficultyScore + timeScore;
+    const score = Math.round(rawScore);
 
-/**
- * Calculates deterministic score out of 100 based on user preferences and course data
- */
-export function calculateCourseScore(course, preferences = {}, completedCourseIds = [], allCourses = []) {
-  const {
-    interests = [],
-    skills = [],
-    studyHours = 5
-  } = preferences;
-
-  const userSkills = new Set(skills.filter((s) => s !== 'None'));
-  const hasBasicComputer = userSkills.has('Basic Computer Knowledge') || userSkills.size > 0;
-  const prereqCheck = checkPrerequisites(course, completedCourseIds, allCourses);
-
-  // 1. INTEREST MATCH (40% -> Max 40 points)
-  let interestScore = 0;
-  if (interests.length === 0) {
-    // Neutral interest default
-    interestScore = 20;
-  } else {
-    const hasCategoryMatch = interests.some((interest) => {
-      const cat = (course.category || '').toLowerCase();
-      const intr = interest.toLowerCase();
-      return cat.includes(intr) || intr.includes(cat);
-    });
-
-    const matchingTags = (course.tags || []).filter((tag) =>
-      interests.some((intr) => tag.toLowerCase().includes(intr.toLowerCase()) || intr.toLowerCase().includes(tag.toLowerCase()))
-    );
-
-    if (hasCategoryMatch) {
-      interestScore = 32 + Math.min(8, matchingTags.length * 4); // 32 - 40
-    } else if (matchingTags.length > 0) {
-      interestScore = 24 + Math.min(10, matchingTags.length * 3); // 24 - 34
-    } else {
-      // General value in tech curriculum
-      interestScore = 10;
-    }
-  }
-
-  // 2. SKILL MATCH (30% -> Max 30 points)
-  let skillScore = 0;
-  const hasSkills = userSkills.size > 0;
-
-  if (!hasSkills) {
-    // User has no prior skills: Beginner starter courses get higher boost
-    if (course.difficulty === 'Beginner') {
-      skillScore = 25;
-    } else {
-      skillScore = 12;
-    }
-  } else {
-    // Check if course required skills match user skills
-    const courseNeedsHtml = (course.requiredSkills || []).some((s) => s.includes('HTML'));
-    const courseNeedsJs = (course.requiredSkills || []).some((s) => s.includes('JavaScript'));
-    const courseNeedsPyOrC = (course.requiredSkills || []).some((s) => s.includes('Python') || s.includes('C'));
-
-    // If course builds directly upon skills the user already possesses
-    let directSkillSynergy = false;
-    if (courseNeedsHtml && userSkills.has('HTML')) directSkillSynergy = true;
-    if (courseNeedsJs && userSkills.has('JavaScript')) directSkillSynergy = true;
-    if (courseNeedsPyOrC && (userSkills.has('Python') || userSkills.has('C Programming'))) directSkillSynergy = true;
-
-    // Does user already have the exact skill taught by this course?
-    const alreadyMastered = (
-      (course.id === 'html-fund' && userSkills.has('HTML')) ||
-      (course.id === 'css-responsive' && userSkills.has('CSS')) ||
-      (course.id === 'js-essentials' && userSkills.has('JavaScript')) ||
-      (course.id === 'python-prog' && userSkills.has('Python')) ||
-      (course.id === 'c-prog' && userSkills.has('C Programming')) ||
-      (course.id === 'sql-db' && userSkills.has('SQL'))
-    );
-
-    if (alreadyMastered) {
-      // Good for reinforcing or advancing, but not primary new learning
-      skillScore = 18;
-    } else if (directSkillSynergy) {
-      skillScore = 29; // Super high synergy
-    } else if (course.difficulty === 'Beginner' && hasBasicComputer) {
-      skillScore = 24;
-    } else if (prereqCheck.isSatisfied) {
-      skillScore = 21;
-    } else {
-      skillScore = 13;
-    }
-  }
-
-  // 3. DIFFICULTY SUITABILITY (15% -> Max 15 points)
-  let difficultyScore = 0;
-  // Estimate user tier based on skills count and completed courses
-  const userExperiencePoints = userSkills.size + completedCourseIds.length;
-  const isBeginnerUser = userExperiencePoints <= 2;
-  const isIntermediateUser = userExperiencePoints >= 3;
-
-  if (course.difficulty === 'Beginner') {
-    if (isBeginnerUser) {
-      difficultyScore = 15;
-    } else {
-      difficultyScore = 12;
-    }
-  } else if (course.difficulty === 'Intermediate') {
-    if (prereqCheck.isSatisfied) {
-      difficultyScore = isIntermediateUser ? 15 : 13;
-    } else {
-      // Prerequisite not satisfied, difficulty is less suitable right now
-      difficultyScore = 8;
-    }
-  } else {
-    // Advanced
-    difficultyScore = isIntermediateUser ? 14 : 9;
-  }
-
-  // 4. WEEKLY TIME COMPATIBILITY (15% -> Max 15 points)
-  let timeScore = 0;
-  const neededHours = course.estimatedHoursPerWeek || 4;
-  const userHours = Math.max(1, Math.min(20, studyHours));
-
-  if (userHours >= neededHours) {
-    // User can fulfill or exceed required weekly hours
-    const ratio = userHours / neededHours;
-    if (ratio <= 2.2) {
-      timeScore = 15; // Sweet spot
-    } else {
-      timeScore = 14; // Plenty of time, can fast-track
-    }
-  } else {
-    // User has fewer hours than recommended pace
-    const ratio = userHours / neededHours;
-    timeScore = Math.max(5, Math.round(ratio * 15));
-  }
-
-  // Deterministic sum capped cleanly
-  const rawScore = interestScore + skillScore + difficultyScore + timeScore;
-  const finalScore = Math.max(20, Math.min(99, Math.round(rawScore)));
-
-  return {
-    totalScore: finalScore,
-    breakdown: {
+    const scoreBreakdown = {
       interestScore: Math.round(interestScore),
       skillScore: Math.round(skillScore),
       difficultyScore: Math.round(difficultyScore),
-      timeScore: Math.round(timeScore)
-    }
-  };
-}
+      timeScore: Math.round(timeScore),
+    };
 
-/**
- * Calculates estimated completion weeks based on total course hours and user's weekly study hours
- */
-export function calculateEstimatedWeeks(totalHours, weeklyHours = 5) {
-  const safeWeekly = Math.max(1, weeklyHours);
-  return Math.max(1, Math.ceil(totalHours / safeWeekly));
-}
+    const personalizedReason = buildReason(
+      course,
+      { interestScore, skillScore, difficultyScore, timeScore },
+      preferences
+    );
 
-/**
- * Generates an inspiring, personalized Physics Wallah-style ed-tech explanation
- */
-export function generatePersonalizedReason(course, score, preferences, prereqCheck, estimatedWeeks) {
-  const { interests = [], skills = [], studyHours = 5 } = preferences;
-  const userSkills = skills.filter((s) => s !== 'None');
+    const prereqCheck = checkPrerequisites(course, courses, progressMap);
 
-  // If prerequisites are missing, clearly advise user
-  if (!prereqCheck.isSatisfied) {
-    return `🔒 High potential match, but you need ${prereqCheck.missingCourseTitles.join(' or ')} first. Complete the prerequisite to unlock!`;
-  }
+    const totalHours = course.totalHours || course.durationHours || 0;
+    const estimatedWeeks = studyHours
+      ? Math.max(1, Math.ceil(totalHours / studyHours))
+      : Math.max(1, Math.ceil(totalHours / WEEKLY_HOURS_DEFAULT));
 
-  // Check category match
-  const matchesInterest = interests.some((intr) =>
-    (course.category || '').toLowerCase().includes(intr.toLowerCase())
-  );
+    const status = progressMap[course.id]?.status || 'not-started';
+    const progressPercent = progressMap[course.id]?.progress || 0;
 
-  // Check synergy with existing skills
-  const hasHtml = userSkills.includes('HTML');
-  const hasPython = userSkills.includes('Python');
-  const hasC = userSkills.includes('C Programming');
-  const hasJs = userSkills.includes('JavaScript');
-
-  if (course.id === 'css-responsive' && hasHtml) {
-    return `💡 Excellent progression! You know HTML; learning CSS will let you design complete, responsive web applications in ~${estimatedWeeks} weeks (${studyHours}h/wk).`;
-  }
-
-  if (course.id === 'js-essentials' && hasHtml) {
-    return `🚀 Perfect next step! Building on your HTML knowledge, JavaScript unlocks dynamic UI logic and APIs within ~${estimatedWeeks} weeks.`;
-  }
-
-  if (course.id === 'react-beginners' && hasJs) {
-    return `⭐ High-demand frontend milestone! Your JavaScript foundation makes this ideal for building modern SPAs in ~${estimatedWeeks} weeks.`;
-  }
-
-  if (course.id === 'dsa') {
-    if (hasPython) {
-      return `🧠 Top-tier algorithm track! Your Python skills satisfy the prerequisite, enabling deep problem-solving practice in ~${estimatedWeeks} weeks.`;
-    }
-    if (hasC) {
-      return `🧠 Solid competitive track! Your C programming foundation provides deep memory understanding for trees and graphs in ~${estimatedWeeks} weeks.`;
-    }
-  }
-
-  if (course.id === 'intro-ai' && hasPython) {
-    return `🤖 Direct AI track! Your Python skills satisfy the prerequisite for neural networks, machine learning, and LLM foundations in ~${estimatedWeeks} weeks.`;
-  }
-
-  if (course.id === 'ui-ux-design' && interests.includes('UI/UX Design')) {
-    return `🎨 Tailored for your UI/UX interest! Master design thinking, color theory, and Figma prototypes at your pace (${estimatedWeeks} weeks).`;
-  }
-
-  if (matchesInterest) {
-    return `🎯 Direct match for your ${course.category} interest. Fits your ${studyHours}h/week schedule comfortably for completion in ~${estimatedWeeks} weeks.`;
-  }
-
-  if (course.difficulty === 'Beginner') {
-    return `✨ Great foundational course to expand your skills. Requires ~${estimatedWeeks} weeks at your current ${studyHours}h/week dedication.`;
-  }
-
-  return `📈 Recommended upskill milestone to broaden your tech portfolio. Target completion in ~${estimatedWeeks} weeks at ${studyHours}h/week.`;
-}
-
-/**
- * Recomputes and enriches all courses with scores, status, estimated weeks, and reasons
- * Returns list sorted by recommendation score descending
- */
-export function getRecommendedCourses(allCourses, preferences, progressMap = {}) {
-  // progressMap format: { [courseId]: 'not-started' | 'in-progress' | 'completed' }
-  const completedIds = Object.keys(progressMap).filter(
-    (id) => progressMap[id]?.status === 'completed' || progressMap[id] === 'completed'
-  );
-
-  const weeklyHours = preferences.studyHours || 5;
-
-  const enriched = allCourses.map((course) => {
-    // Current course status in user profile
-    const rawProgress = progressMap[course.id];
-    const status = typeof rawProgress === 'object' ? rawProgress.status : (rawProgress || 'not-started');
-    const progressPercent = typeof rawProgress === 'object' ? (rawProgress.progress || 0) : (status === 'completed' ? 100 : status === 'in-progress' ? 40 : 0);
-
-    const prereqCheck = checkPrerequisites(course, completedIds, allCourses);
-    const readiness = getCourseReadiness(course, status, completedIds, allCourses);
-    const scoreResult = calculateCourseScore(course, preferences, completedIds, allCourses);
-    const estimatedWeeks = calculateEstimatedWeeks(course.totalHours, weeklyHours);
-    const reason = generatePersonalizedReason(course, scoreResult.totalScore, preferences, prereqCheck, estimatedWeeks);
+    // Readiness
+    let readiness;
+    if (status === 'completed') readiness = 'Completed';
+    else if (status === 'in-progress') readiness = 'In Progress';
+    else if (!prereqCheck.isSatisfied) readiness = 'Prerequisite Required';
+    else readiness = 'Ready to Start';
 
     return {
       ...course,
-      score: scoreResult.totalScore,
-      scoreBreakdown: scoreResult.breakdown,
-      status, // 'not-started' | 'in-progress' | 'completed'
-      progressPercent,
-      readiness, // 'Ready to Start' | 'Prerequisite Required' | 'In Progress' | 'Completed'
+      score,
+      scoreBreakdown,
+      personalizedReason,
       prereqCheck,
       estimatedWeeks,
-      personalizedReason: reason
+      status,
+      progressPercent,
+      readiness,
     };
   });
 
-  // Sort deterministically:
-  // 1. Highest score first
-  // 2. If tied, ready/in-progress prioritized over prerequisite required
-  return enriched.sort((a, b) => {
-    if (b.score !== a.score) {
-      return b.score - a.score;
-    }
-    // Prioritize ready courses
-    const order = { 'In Progress': 3, 'Ready to Start': 2, 'Completed': 1, 'Prerequisite Required': 0 };
-    return (order[b.readiness] || 0) - (order[a.readiness] || 0);
-  });
+  // Sort by score desc
+  return enriched.sort((a, b) => b.score - a.score);
 }

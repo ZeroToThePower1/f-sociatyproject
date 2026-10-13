@@ -1,46 +1,38 @@
-// /app/src/components/ProfileForm.jsx
+// /client/src/components/ProfileForm.jsx
 import React, { useState, useEffect } from 'react';
 import {
   INTEREST_OPTIONS,
-  SKILL_OPTIONS
+  SKILL_OPTIONS,
 } from '../data/courses';
 import {
   Sliders,
   Sparkles,
-  Clock,
-  BookOpen,
-  Award,
-  RefreshCw,
   Check,
-  Zap,
-  Info
 } from './icons';
 
 export default function ProfileForm({
   preferences,
   onSavePreferences,
   onFindCourses,
-  onResetPreferences,
-  activeProfileKey
 }) {
   const [formData, setFormData] = useState({
-    interests: preferences.interests || [],
-    skills: preferences.skills || [],
-    studyHours: preferences.studyHours || 5
+    interests: preferences?.interests || [],
+    skills: preferences?.skills || [],
+    studyHours: preferences?.studyHours || 5,
   });
 
   const [savedNotification, setSavedNotification] = useState(false);
 
-  // Sync when active profile or external preferences prop changes
+  // Sync when external preferences prop changes
   useEffect(() => {
     setFormData({
-      interests: preferences.interests || [],
-      skills: preferences.skills || [],
-      studyHours: preferences.studyHours || 5
+      interests: preferences?.interests || [],
+      skills: preferences?.skills || [],
+      studyHours: preferences?.studyHours || 5,
     });
-  }, [preferences, activeProfileKey]);
+  }, [preferences]);
 
-  // Handle toggling of interests
+  // Toggle interest
   const toggleInterest = (interest) => {
     setFormData((prev) => {
       const exists = prev.interests.includes(interest);
@@ -51,19 +43,17 @@ export default function ProfileForm({
     });
   };
 
-  // Handle toggling of skills with 'None' handling
+  // Toggle skill with 'None' handling
   const toggleSkill = (skill) => {
     setFormData((prev) => {
       if (skill === 'None') {
-        // Toggling 'None' clears all other skills
         const hasNone = prev.skills.includes('None');
         return {
           ...prev,
-          skills: hasNone ? [] : ['None']
+          skills: hasNone ? [] : ['None'],
         };
       }
 
-      // Toggling any actual skill removes 'None'
       const withoutNone = prev.skills.filter((s) => s !== 'None');
       const exists = withoutNone.includes(skill);
       const nextSkills = exists
@@ -72,18 +62,18 @@ export default function ProfileForm({
 
       return {
         ...prev,
-        skills: nextSkills.length === 0 ? ['None'] : nextSkills
+        skills: nextSkills.length === 0 ? ['None'] : nextSkills,
       };
     });
   };
 
-  // Handle study hours change
+  // Study hours change
   const handleHoursChange = (e) => {
     const val = parseInt(e.target.value, 10);
     setFormData((prev) => ({ ...prev, studyHours: val }));
   };
 
-  // Form submission / Find My Courses action
+  // Submit
   const handleSubmit = (e) => {
     e?.preventDefault();
     onSavePreferences(formData);
@@ -94,12 +84,35 @@ export default function ProfileForm({
     }
   };
 
-  // Pacing descriptor based on hours slider
+  // Pacing descriptor
   const getPacingLabel = (hours) => {
-    if (hours <= 3) return { text: 'Casual & Relaxed', color: 'text-blue-600', bg: 'bg-blue-50', emoji: '🌱' };
-    if (hours <= 7) return { text: 'Balanced & Steady', color: 'text-purple-600', bg: 'bg-purple-50', emoji: '🎯' };
-    if (hours <= 12) return { text: 'Accelerated Focus', color: 'text-indigo-600', bg: 'bg-indigo-50', emoji: '🚀' };
-    return { text: 'Intensive Bootcamp', color: 'text-rose-600', bg: 'bg-rose-50', emoji: '🔥' };
+    if (hours <= 3)
+      return {
+        text: 'Casual & Relaxed',
+        color: 'text-blue-600',
+        bg: 'bg-blue-50',
+        emoji: '🌱',
+      };
+    if (hours <= 7)
+      return {
+        text: 'Balanced & Steady',
+        color: 'text-purple-600',
+        bg: 'bg-purple-50',
+        emoji: '🎯',
+      };
+    if (hours <= 12)
+      return {
+        text: 'Accelerated Focus',
+        color: 'text-indigo-600',
+        bg: 'bg-indigo-50',
+        emoji: '🚀',
+      };
+    return {
+      text: 'Intensive Bootcamp',
+      color: 'text-rose-600',
+      bg: 'bg-rose-50',
+      emoji: '🔥',
+    };
   };
 
   const paceInfo = getPacingLabel(formData.studyHours);
@@ -117,12 +130,12 @@ export default function ProfileForm({
             Customize Your Skill Journey
           </h2>
           <p className="text-purple-100 text-sm max-w-2xl leading-relaxed">
-            Tell us what you want to learn, what you already know, and how much time you have.
-            Our deterministic recommendation engine recomputes match scores in real time!
+            Tell us what you want to learn, what you already know, and how much
+            time you have. Our deterministic recommendation engine recomputes
+            match scores in real time!
           </p>
         </div>
 
-        {/* Decorative background shapes */}
         <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
       </div>
 
@@ -140,17 +153,22 @@ export default function ProfileForm({
         </div>
       )}
 
-      {/* Main Form Form Card */}
-      <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200/90 shadow-sm space-y-8">
-        {/* SECTION 1: Interests Selection */}
+      {/* Main Form Card */}
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200/90 shadow-sm space-y-8"
+      >
+        {/* SECTION 1: Interests */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <label className="text-base font-bold text-slate-900 block">
-                Target Interests & Domains <span className="text-purple-600 font-extrabold">*</span>
+                Target Interests & Domains{' '}
+                <span className="text-purple-600 font-extrabold">*</span>
               </label>
               <p className="text-xs text-slate-500">
-                Select one or more domains you are eager to master (40% scoring weight).
+                Select one or more domains you are eager to master (40% scoring
+                weight).
               </p>
             </div>
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700">
@@ -174,22 +192,26 @@ export default function ProfileForm({
                   aria-pressed={isSelected}
                 >
                   <span className="leading-tight">{interest}</span>
-                  {isSelected && <Check size={14} className="shrink-0 stroke-[3]" />}
+                  {isSelected && (
+                    <Check size={14} className="shrink-0 stroke-[3]" />
+                  )}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* SECTION 2: Existing Skills Selection */}
+        {/* SECTION 2: Skills */}
         <div className="space-y-3 pt-4 border-t border-slate-100">
           <div className="flex items-center justify-between">
             <div>
               <label className="text-base font-bold text-slate-900 block">
-                Your Current Skills <span className="text-purple-600 font-extrabold">*</span>
+                Your Current Skills{' '}
+                <span className="text-purple-600 font-extrabold">*</span>
               </label>
               <p className="text-xs text-slate-500">
-                Select skills you already know. Helps resolve prerequisites and calculate skill match (30% weight).
+                Select skills you already know. Helps resolve prerequisites and
+                calculate skill match (30% weight).
               </p>
             </div>
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
@@ -215,26 +237,34 @@ export default function ProfileForm({
                   aria-pressed={isSelected}
                 >
                   <span className="leading-tight">{skill}</span>
-                  {isSelected && <Check size={14} className="shrink-0 stroke-[3]" />}
+                  {isSelected && (
+                    <Check size={14} className="shrink-0 stroke-[3]" />
+                  )}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* SECTION 3: Study Hours Slider (1 - 20) */}
+        {/* SECTION 3: Study Hours */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
           <div className="flex items-center justify-between">
             <div>
-              <label htmlFor="study-hours-slider" className="text-base font-bold text-slate-900 block">
+              <label
+                htmlFor="study-hours-slider"
+                className="text-base font-bold text-slate-900 block"
+              >
                 Weekly Study Commitment
               </label>
               <p className="text-xs text-slate-500">
-                How many hours can you dedicate each week? (15% scoring weight & week estimation).
+                How many hours can you dedicate each week? (15% scoring weight &
+                week estimation).
               </p>
             </div>
 
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 ${paceInfo.bg}`}>
+            <div
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 ${paceInfo.bg}`}
+            >
               <span className="text-sm">{paceInfo.emoji}</span>
               <span className={`text-xs font-bold ${paceInfo.color}`}>
                 {paceInfo.text}
@@ -244,14 +274,20 @@ export default function ProfileForm({
 
           <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200/80 space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-400">1 hr/wk (Minimum)</span>
+              <span className="text-xs font-bold text-slate-400">
+                1 hr/wk (Minimum)
+              </span>
               <div className="text-center">
                 <span className="text-4xl font-extrabold text-purple-700 tracking-tight">
                   {formData.studyHours}
                 </span>
-                <span className="text-sm font-bold text-slate-600 ml-1">hours / week</span>
+                <span className="text-sm font-bold text-slate-600 ml-1">
+                  hours / week
+                </span>
               </div>
-              <span className="text-xs font-bold text-slate-400">20 hrs/wk (Maximum)</span>
+              <span className="text-xs font-bold text-slate-400">
+                20 hrs/wk (Maximum)
+              </span>
             </div>
 
             <input
@@ -275,26 +311,15 @@ export default function ProfileForm({
           </div>
         </div>
 
-        {/* SECTION 4: Action Controls Row */}
-        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* SECTION 4: Submit */}
+        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-end gap-4">
           <button
-            type="button"
-            onClick={onResetPreferences}
-            className="w-full sm:w-auto text-xs font-semibold px-4 py-3 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all flex items-center justify-center gap-2"
+            type="submit"
+            className="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold shadow-md shadow-purple-300 hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-98"
           >
-            <RefreshCw size={14} />
-            <span>Reset to Profile Defaults</span>
+            <Sparkles size={16} />
+            <span>Save & Find My Courses</span>
           </button>
-
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <button
-              type="submit"
-              className="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold shadow-md shadow-purple-300 hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-98"
-            >
-              <Sparkles size={16} />
-              <span>Find My Courses</span>
-            </button>
-          </div>
         </div>
       </form>
     </div>

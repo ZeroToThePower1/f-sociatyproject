@@ -1,5 +1,5 @@
-// /app/src/components/Navbar.jsx
-import React, { useState } from 'react';
+// /client/src/components/Navbar.jsx
+import React, { useState, useRef, useEffect } from 'react';
 import {
   GraduationCap,
   Flame,
@@ -10,28 +10,58 @@ import {
   Compass,
   Layers,
   BookOpen,
-  RefreshCw,
-  Clock
+  Clock,
+  LogOut,
+  ChevronDown,
+  ShieldCheck,
 } from './icons';
 
 export default function Navbar({
   currentView,
   onNavigate,
-  activeProfileKey,
-  onSwitchProfile,
   preferences,
   isMobileMenuOpen,
-  setIsMobileMenuOpen
+  setIsMobileMenuOpen,
+  currentUser,
+  onLogout,
+  isAdmin = false,
 }) {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Sparkles },
     { id: 'explore', label: 'Courses', icon: Compass },
     { id: 'mylearning', label: 'My Learning', icon: BookOpen },
     { id: 'roadmap', label: 'Roadmap', icon: Layers },
-    { id: 'profile', label: 'Profile', icon: User }
+    { id: 'profile', label: 'Profile', icon: User },
+    // Admin link (only for admins)
+    ...(isAdmin
+      ? [{ id: 'admin', label: 'Admin', icon: ShieldCheck }]
+      : []),
   ];
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setProfileDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // User display info
+  const userEmail = currentUser?.email || 'User';
+  const userName = currentUser?.user_metadata?.name || userEmail.split('@')[0];
+  const userInitial = userName.charAt(0).toUpperCase();
+
+  const handleLogoutClick = () => {
+    setProfileDropdownOpen(false);
+    setIsMobileMenuOpen(false);
+    if (onLogout) onLogout();
+  };
 
   return (
     <header className="skillpath-navbar bg-white/95 backdrop-blur-md border-b border-slate-200/90 sticky top-0 z-40 transition-all">
@@ -72,6 +102,7 @@ export default function Navbar({
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
+            const isAdminLink = item.id === 'admin';
             return (
               <button
                 key={item.id}
@@ -79,18 +110,29 @@ export default function Navbar({
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                   isActive
                     ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs'
+                    : isAdminLink
+                    ? 'text-amber-700 hover:text-amber-800 hover:bg-amber-50 border border-amber-200/60'
                     : 'text-slate-600 hover:text-purple-600 hover:bg-slate-50'
                 }`}
                 aria-current={isActive ? 'page' : undefined}
               >
-                <Icon size={14} className={isActive ? 'text-purple-600' : 'text-slate-400'} />
+                <Icon
+                  size={14}
+                  className={
+                    isActive
+                      ? 'text-purple-600'
+                      : isAdminLink
+                      ? 'text-amber-600'
+                      : 'text-slate-400'
+                  }
+                />
                 <span>{item.label}</span>
               </button>
             );
           })}
         </nav>
 
-        {/* Right: Streak & Persona Switcher */}
+        {/* Right: Streak, Hours & User Menu */}
         <div className="flex items-center gap-2.5">
           {/* Daily Streak Indicator */}
           <div
@@ -108,93 +150,95 @@ export default function Navbar({
             title="Weekly Study Hours Commitment"
           >
             <Clock size={13} className="text-purple-600" />
-            <span>{preferences.studyHours || 5}h/wk</span>
+            <span>{preferences?.studyHours || 5}h/wk</span>
           </div>
 
-          {/* Quick Persona Switcher Button & Dropdown */}
-          <div className="relative">
+          {/* User Avatar & Dropdown */}
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-xs font-bold text-slate-800 transition-all shadow-2xs"
-              aria-label="Profile switcher dropdown"
+              className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 transition-all shadow-2xs"
+              aria-label="User menu"
               aria-expanded={profileDropdownOpen}
             >
-              <span className="text-sm">
-                {activeProfileKey === 'profileA' ? '👨‍💻' : '👩‍💻'}
+              {/* Avatar circle */}
+              <span className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center text-xs font-black shadow-sm">
+                {userInitial}
               </span>
-              <span className="hidden sm:inline">
-                {activeProfileKey === 'profileA' ? 'Alex Chen' : 'Priya Sharma'}
+              <span className="hidden sm:inline text-xs font-bold text-slate-800 max-w-[100px] truncate">
+                {userName}
               </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-extrabold uppercase">
-                {activeProfileKey === 'profileA' ? 'Profile A' : 'Profile B'}
-              </span>
+              <ChevronDown
+                size={14}
+                className={`text-slate-400 transition-transform ${
+                  profileDropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
             </button>
 
             {/* Dropdown Menu */}
             {profileDropdownOpen && (
               <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl py-2 z-50 text-xs">
-                <div className="px-3 py-2 border-b border-slate-100">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                    Active Demo Persona
-                  </span>
-                  <p className="font-extrabold text-slate-800 text-xs mt-0.5">
-                    {activeProfileKey === 'profileA' ? 'Alex Chen (Frontend)' : 'Priya Sharma (AI & DSA)'}
-                  </p>
+                {/* User Info Header */}
+                <div className="px-3 py-2.5 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center text-sm font-black shadow-sm">
+                      {userInitial}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-extrabold text-slate-900 text-xs truncate">
+                        {userName}
+                      </p>
+                      <p className="text-[10px] text-slate-500 truncate">
+                        {userEmail}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <span className="inline-block text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      ● Signed In
+                    </span>
+                    {isAdmin && (
+                      <span className="inline-block text-[9px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        ⚡ Admin
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="p-1 space-y-1">
-                  <button
-                    onClick={() => {
-                      onSwitchProfile('profileA');
-                      setProfileDropdownOpen(false);
-                    }}
-                    className={`w-full px-3 py-2 rounded-xl text-left font-semibold flex items-center justify-between ${
-                      activeProfileKey === 'profileA'
-                        ? 'bg-purple-50 text-purple-800 font-bold'
-                        : 'text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>👨‍💻</span>
-                      <div>
-                        <div className="font-bold text-slate-900">Alex Chen (Profile A)</div>
-                        <div className="text-[10px] text-slate-500">Web Dev + UI/UX (5h/wk)</div>
-                      </div>
-                    </div>
-                    {activeProfileKey === 'profileA' && <span className="text-purple-600 font-bold">✓</span>}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      onSwitchProfile('profileB');
-                      setProfileDropdownOpen(false);
-                    }}
-                    className={`w-full px-3 py-2 rounded-xl text-left font-semibold flex items-center justify-between ${
-                      activeProfileKey === 'profileB'
-                        ? 'bg-purple-50 text-purple-800 font-bold'
-                        : 'text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>👩‍💻</span>
-                      <div>
-                        <div className="font-bold text-slate-900">Priya Sharma (Profile B)</div>
-                        <div className="text-[10px] text-slate-500">AI + DSA (10h/wk)</div>
-                      </div>
-                    </div>
-                    {activeProfileKey === 'profileB' && <span className="text-purple-600 font-bold">✓</span>}
-                  </button>
-                </div>
-
-                <div className="pt-1 mt-1 border-t border-slate-100 px-2">
+                {/* Actions */}
+                <div className="p-1 space-y-0.5">
                   <button
                     onClick={() => {
                       onNavigate('profile');
                       setProfileDropdownOpen(false);
                     }}
-                    className="w-full text-center py-1.5 text-[11px] font-bold text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
+                    className="w-full px-3 py-2 rounded-xl text-left font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
                   >
-                    Configure Custom Profile &rarr;
+                    <User size={13} className="text-slate-400" />
+                    <span>My Profile</span>
+                  </button>
+
+                  {/* Admin Panel shortcut (dropdown) */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        onNavigate('admin');
+                        setProfileDropdownOpen(false);
+                      }}
+                      className="w-full px-3 py-2 rounded-xl text-left font-semibold text-amber-800 hover:bg-amber-50 flex items-center gap-2 transition-colors"
+                    >
+                      <ShieldCheck size={13} className="text-amber-600" />
+                      <span>Admin Panel</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleLogoutClick}
+                    className="w-full px-3 py-2 rounded-xl text-left font-semibold text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition-colors"
+                  >
+                    <LogOut size={13} className="text-rose-500" />
+                    <span>Log Out</span>
                   </button>
                 </div>
               </div>
@@ -206,9 +250,27 @@ export default function Navbar({
       {/* Mobile Drawer Menu */}
       {isMobileMenuOpen && (
         <div className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 space-y-2 shadow-lg animate-in slide-in-from-top-2">
+          {/* User info on mobile */}
+          <div className="flex items-center gap-2.5 px-2 py-2 mb-1 rounded-xl bg-slate-50 border border-slate-100">
+            <span className="w-9 h-9 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center text-sm font-black">
+              {userInitial}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-slate-900 text-xs truncate">{userName}</p>
+              <p className="text-[10px] text-slate-500 truncate">{userEmail}</p>
+            </div>
+            {isAdmin && (
+              <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                ⚡ Admin
+              </span>
+            )}
+          </div>
+
+          {/* Nav items */}
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
+            const isAdminLink = item.id === 'admin';
             return (
               <button
                 key={item.id}
@@ -219,19 +281,42 @@ export default function Navbar({
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
                   isActive
                     ? 'bg-purple-600 text-white'
+                    : isAdminLink
+                    ? 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200'
                     : 'text-slate-700 hover:bg-purple-50 hover:text-purple-700'
                 }`}
               >
-                <Icon size={18} className={isActive ? 'text-white' : 'text-slate-500'} />
+                <Icon
+                  size={18}
+                  className={
+                    isActive
+                      ? 'text-white'
+                      : isAdminLink
+                      ? 'text-amber-600'
+                      : 'text-slate-500'
+                  }
+                />
                 <span>{item.label}</span>
               </button>
             );
           })}
 
+          {/* Stats row */}
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-semibold px-2">
             <span className="text-slate-500">Daily Streak: 🔥 3 Days</span>
-            <span className="text-purple-700 font-bold">Target: {preferences.studyHours || 5}h / week</span>
+            <span className="text-purple-700 font-bold">
+              Target: {preferences?.studyHours || 5}h / week
+            </span>
           </div>
+
+          {/* Logout on mobile */}
+          <button
+            onClick={handleLogoutClick}
+            className="w-full mt-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors"
+          >
+            <LogOut size={16} />
+            <span>Log Out</span>
+          </button>
         </div>
       )}
     </header>

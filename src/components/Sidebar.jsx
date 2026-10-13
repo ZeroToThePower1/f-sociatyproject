@@ -1,35 +1,49 @@
-// /app/src/components/Sidebar.jsx
+// /client/src/components/Sidebar.jsx
 import React from 'react';
 import {
   BookOpen,
   Compass,
   Layers,
   User,
-  Sliders,
   Sparkles,
   Flame,
-  Award,
   ChevronRight,
   GraduationCap,
-  Play
+  ShieldCheck,
 } from './icons';
 
 export default function Sidebar({
   currentView,
   onNavigate,
-  activeProfileKey,
   preferences,
   completedCount,
   inProgressCount,
-  totalCourses = 10
+  totalCourses = 10,
+  currentUser,
+  isAdmin = false,
 }) {
   const navItems = [
     { id: 'dashboard', label: 'Home Dashboard', icon: Sparkles },
     { id: 'explore', label: 'Explore Courses', icon: Compass },
-    { id: 'mylearning', label: 'My Learning', icon: BookOpen, badge: inProgressCount > 0 ? `${inProgressCount}` : null },
+    {
+      id: 'mylearning',
+      label: 'My Learning',
+      icon: BookOpen,
+      badge: inProgressCount > 0 ? `${inProgressCount}` : null,
+    },
     { id: 'roadmap', label: 'Learning Roadmap', icon: Layers },
-    { id: 'profile', label: 'My Profile', icon: User }
+    { id: 'profile', label: 'My Profile', icon: User },
+    // Admin link (only for admins)
+    ...(isAdmin
+      ? [{ id: 'admin', label: 'Admin Panel', icon: ShieldCheck }]
+      : []),
   ];
+
+  // Logged-in user info
+  const userEmail = currentUser?.email || '';
+  const userName =
+    currentUser?.user_metadata?.name || userEmail.split('@')[0] || 'User';
+  const userInitial = userName.charAt(0).toUpperCase();
 
   return (
     <aside className="skillpath-sidebar w-64 bg-white border-r border-slate-200/90 flex flex-col justify-between shrink-0 h-screen sticky top-0 select-none z-30 hidden lg:flex">
@@ -77,6 +91,42 @@ export default function Sidebar({
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
+            const isAdminLink = item.id === 'admin';
+
+            // Admin link: amber styling
+            if (isAdminLink) {
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onNavigate(item.id)}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all mt-2 border-t border-slate-100 pt-3 ${
+                    isActive
+                      ? 'bg-amber-500 text-white shadow-sm shadow-amber-200'
+                      : 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200'
+                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon
+                      size={18}
+                      className={isActive ? 'text-white' : 'text-amber-600'}
+                    />
+                    <span>{item.label}</span>
+                  </div>
+                  <span
+                    className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
+                      isActive
+                        ? 'bg-white text-amber-700'
+                        : 'bg-amber-200 text-amber-800'
+                    }`}
+                  >
+                    Admin
+                  </span>
+                </button>
+              );
+            }
+
+            // Regular links
             return (
               <button
                 key={item.id}
@@ -128,34 +178,40 @@ export default function Sidebar({
           <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
             <div
               className="h-full bg-purple-600 rounded-full transition-all duration-300"
-              style={{ width: `${Math.round((completedCount / totalCourses) * 100)}%` }}
+              style={{
+                width: `${
+                  totalCourses > 0
+                    ? Math.round((completedCount / totalCourses) * 100)
+                    : 0
+                }%`,
+              }}
             />
           </div>
 
           <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
             <span>Commitment:</span>
-            <span className="font-bold text-slate-800">{preferences.studyHours || 5}h / week</span>
+            <span className="font-bold text-slate-800">
+              {preferences?.studyHours || 5}h / week
+            </span>
           </div>
         </div>
 
-        {/* Active persona footer */}
+        {/* Logged-in user footer */}
         <div
           onClick={() => onNavigate('profile')}
           className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100/80 cursor-pointer transition-colors"
           title="Click to view My Profile"
         >
-          <div className="w-8 h-8 rounded-full bg-purple-100 border border-purple-200 flex items-center justify-center text-sm font-bold">
-            {activeProfileKey === 'profileA' ? '👨‍💻' : '👩‍💻'}
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-xs font-black text-white shadow-sm shrink-0">
+            {userInitial}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-slate-800 truncate">
-              {activeProfileKey === 'profileA' ? 'Alex Chen' : 'Priya Sharma'}
-            </p>
+            <p className="text-xs font-bold text-slate-800 truncate">{userName}</p>
             <p className="text-[10px] text-purple-600 font-semibold truncate">
-              {activeProfileKey === 'profileA' ? 'Frontend Track' : 'AI & DSA Track'}
+              {userEmail}
             </p>
           </div>
-          <ChevronRight size={14} className="text-slate-400" />
+          <ChevronRight size={14} className="text-slate-400 shrink-0" />
         </div>
       </div>
     </aside>
