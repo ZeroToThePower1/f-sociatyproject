@@ -1,70 +1,351 @@
-# Getting Started with Create React App
+# CourseCompass 🧭
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+> **Smart Online Course Recommendation System**
+> A personalized learning path advisor that recommends online courses based on a student's interests, current skills, and available study time.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## 📌 Project Overview
 
-### `npm start`
+**CourseCompass** is a web application built for students who want to learn online but feel overwhelmed by the endless number of courses available. Instead of scrolling through hundreds of options, students enter their **interests**, **existing skills**, and **weekly study hours**, and the app:
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- Ranks courses from **most suitable → least suitable**
+- Explains **why** each course was recommended
+- Suggests a **learning order** (which course to take first)
+- Tracks progress (**Not Started / In Progress / Completed**)
+- Blocks courses whose prerequisites haven't been completed
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+---
 
-### `npm test`
+## 👥 Team: F-Society
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+| Name | Role | Branch / Year |
+|------|------|---------------|
+| **Sami** | Team Lead & Backend Developer | BCA – 2nd Year |
+| **Jatin** | Frontend Developer | BCA – 2nd Year |
+| **Himanshu** | Full-Stack / Database | B.Tech – 1st Year |
+| **Ayush** | UI/UX & Frontend | BCA – 1st Year |
 
-### `npm run build`
+---
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## 🛠️ Tech Stack
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| Frontend | **React (Vite)** | UI, routing, state management |
+| Styling | **CSS** | Custom, responsive UI |
+| Backend / DB | **Supabase** | Postgres DB, Auth (optional), REST API |
+| State / Data | **Supabase JS Client** | Query courses, save progress |
+| Hosting | **Vercel** (frontend) + Supabase Cloud | Deployment |
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+> ⚠️ No external paid APIs. All course data is **sample data** stored in Supabase.
 
-### `npm run eject`
+---
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## 🎯 Main Features
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+1. **Course Catalog** – Browse sample courses with name, topic, difficulty, required skills, duration, description.
+2. **Student Profile Input** – Select interests, known skills, and study hours/week.
+3. **Smart Ranking** – Courses sorted by suitability with a reason per suggestion.
+4. **Prerequisite-Aware Ordering** – Suggests a learning path; blocks locked courses.
+5. **Progress Tracking** – Mark courses as Not Started / In Progress / Completed.
+6. **Empty State Handling** – Friendly message when no course matches.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+---
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## 📂 Project Structure
 
-## Learn More
+```
+coursecompass/
+├── frontend/                      # React app (Vite)
+│   ├── public/
+│   ├── src/
+│   │   ├── assets/
+│   │   ├── components/            # Reusable UI components
+│   │   │   ├── CourseCard.jsx
+│   │   │   ├── CourseList.jsx
+│   │   │   ├── FilterPanel.jsx
+│   │   │   ├── ProgressBadge.jsx
+│   │   │   ├── ReasonTag.jsx
+│   │   │   ├── LearningPath.jsx
+│   │   │   └── EmptyState.jsx
+│   │   ├── pages/
+│   │   │   ├── Home.jsx
+│   │   │   ├── ProfileSetup.jsx
+│   │   │   ├── Recommendations.jsx
+│   │   │   └── MyCourses.jsx
+│   │   ├── lib/
+│   │   │   ├── supabaseClient.js   # Supabase init
+│   │   │   ├── recommender.js      # Ranking algorithm (frontend fallback)
+│   │   │   └── constants.js
+│   │   ├── hooks/
+│   │   │   ├── useCourses.js
+│   │   │   └── useProgress.js
+│   │   ├── context/
+│   │   │   └── StudentContext.jsx
+│   │   ├── App.jsx
+│   │   ├── main.jsx
+│   │   └── index.css
+│   ├── .env.local
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
+│
+├── backend/                       # Supabase logic (SQL + Edge Functions optional)
+│   ├── supabase/
+│   │   ├── migrations/
+│   │   │   ├── 001_create_tables.sql
+│   │   │   └── 002_seed_courses.sql
+│   │   └── functions/
+│   │       └── recommend/         # Optional Edge Function
+│   │           └── index.ts
+│   └── README.md
+│
+├── docs/
+│   ├── algorithm.md               # Ranking & ordering logic
+│   ├── schema.md                  # DB schema explanation
+│   └── test-profiles.md           # 2 student profiles for testing
+│
+├── .gitignore
+├── LICENSE
+└── README.md
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+---
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## 🗄️ Database Schema (Supabase / Postgres)
 
-### Code Splitting
+### Table: `courses`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | `uuid` (PK) | Auto-generated |
+| `name` | `text` | e.g. "React Basics" |
+| `topic` | `text` | e.g. "Web Development" |
+| `difficulty` | `text` | `Beginner` / `Intermediate` / `Advanced` |
+| `required_skills` | `text[]` | e.g. `['HTML','CSS']` |
+| `duration_hours` | `int` | Total hours |
+| `description` | `text` | Short summary |
+| `prerequisite_course_id` | `uuid` (FK, nullable) | Points to another course in `courses` |
 
-### Analyzing the Bundle Size
+### Table: `student_profiles`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | `uuid` (PK) | Auto |
+| `name` | `text` | Student name |
+| `interests` | `text[]` | Chosen topics |
+| `known_skills` | `text[]` | Skills they already have |
+| `hours_per_week` | `int` | Available study time |
+| `created_at` | `timestamptz` | Default `now()` |
 
-### Making a Progressive Web App
+### Table: `progress`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | `uuid` (PK) | Auto |
+| `student_id` | `uuid` (FK) | → `student_profiles.id` |
+| `course_id` | `uuid` (FK) | → `courses.id` |
+| `status` | `text` | `not_started` / `in_progress` / `completed` |
+| `updated_at` | `timestamptz` | Auto |
 
-### Advanced Configuration
+> **Unique constraint:** `(student_id, course_id)` so there is one row per course per student.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+---
 
-### Deployment
+## 🧠 Recommendation Algorithm
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+Full details in [`docs/algorithm.md`](docs/algorithm.md). Summary:
 
-### `npm run build` fails to minify
+### 1. Filtering
+- Remove courses that have an unmet **prerequisite** from the *"Ready to Start"* list.
+- Mark them as **Locked** with a message: `"Complete <Prerequisite Course> first."`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### 2. Scoring (0 – 100)
+
+| Factor | Weight | How it's scored |
+|--------|--------|-----------------|
+| Topic match | **40** | +40 if course topic ∈ student interests |
+| Skill match | **25** | +25 × (known skills ∩ required skills) / required skills |
+| Time fit | **20** | +20 if `duration_hours ≤ hours_per_week × 4` (finish within ~4 weeks) |
+| Difficulty fit | **15** | +15 if difficulty matches student's inferred level |
+
+### 3. Explanation
+Each suggestion shows a short reason derived from the top scoring factor:
+- `"Matches your interest in Web Development."`
+- `"You already know HTML, CSS — you're 60% ready."`
+- `"Fits your 5 hrs/week schedule (20 hrs total)."`
+
+### 4. Suggested Order (Learning Path)
+- Build a **DAG** from `prerequisite_course_id`.
+- Topologically sort courses that the student is eligible for.
+- Show locked courses greyed out beneath their prerequisite.
+
+---
+
+## 🧪 Testing with Two Student Profiles
+
+We test the app with **two different profiles** to prove recommendations change.
+
+### Profile A — Aarav (Beginner, Web Focus)
+```json
+{
+  "name": "Aarav",
+  "interests": ["Web Development", "UI/UX"],
+  "known_skills": ["HTML", "CSS"],
+  "hours_per_week": 10
+}
+```
+
+**Expected behavior:**
+- Top pick: *JavaScript Fundamentals*
+- *React Basics* shown as **Locked** (needs JavaScript)
+- Advanced courses ranked low
+
+### Profile B — Diya (Intermediate, Data Focus)
+```json
+{
+  "name": "Diya",
+  "interests": ["Data Science", "Python"],
+  "known_skills": ["Python", "Statistics"],
+  "hours_per_week": 5
+}
+```
+
+**Expected behavior:**
+- Top pick: *Pandas for Data Analysis*
+- Web courses ranked low
+- Longer courses pushed down due to 5 hrs/week limit
+
+> ✅ Different profiles → different rankings → different learning paths.
+
+---
+
+## 🚀 Setup Instructions
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/f-society/coursecompass.git
+cd coursecompass
+```
+
+### 2. Frontend setup
+```bash
+cd frontend
+npm install
+```
+
+Create `.env.local`:
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Run:
+```bash
+npm run dev
+```
+
+### 3. Supabase setup
+1. Create a project at [supabase.com](https://supabase.com).
+2. Open **SQL Editor** and run:
+   - `backend/supabase/migrations/001_create_tables.sql`
+   - `backend/supabase/migrations/002_seed_courses.sql`
+3. Copy your **Project URL** and **anon key** into `.env.local`.
+
+### 4. Seed Data
+`002_seed_courses.sql` inserts ~12 sample courses across topics like:
+- Web Development (HTML, CSS, JavaScript, React)
+- Data Science (Python, Pandas, ML)
+- App Development
+- UI/UX Design
+
+Includes at least **one prerequisite chain** (e.g. *JavaScript → React*).
+
+---
+
+## 🖥️ Pages & Routes
+
+| Route | Page | Purpose |
+|-------|------|---------|
+| `/` | Home | Landing + CTA to start |
+| `/profile` | ProfileSetup | Choose interests, skills, hours |
+| `/recommendations` | Recommendations | Ranked list + reasons + path |
+| `/my-courses` | MyCourses | Track Not Started / In Progress / Completed |
+
+---
+
+## 🧩 Key Components & Responsibilities
+
+| Component | Responsibility |
+|-----------|----------------|
+| `CourseCard` | Shows one course with score, reason, status toggle |
+| `FilterPanel` | Chips for interests, skills, slider for hours |
+| `ReasonTag` | Renders "why recommended" text |
+| `LearningPath` | Visual ordered list with locked steps |
+| `ProgressBadge` | Colored chip: grey / yellow / green |
+| `EmptyState` | Message when no courses match |
+
+---
+
+## 📜 Scripts
+
+| Command | What it does |
+|---------|--------------|
+| `npm run dev` | Start dev server |
+| `npm run build` | Production build |
+| `npm run preview` | Preview build |
+| `npm run lint` | Lint code |
+
+---
+
+## 🔒 Important Rules (Recap)
+
+- ✅ Only **sample data** — no paid APIs.
+- ✅ Never mark a locked course as "Ready to Start."
+- ✅ Always show **what to complete first**.
+- ✅ Always show a **friendly empty state** if nothing matches.
+- ✅ Recommendation reason must be **human-readable**.
+
+---
+
+## 📅 Suggested Development Plan (Hackathon)
+
+| Day | Goal |
+|-----|------|
+| Day 1 | Supabase project + tables + seed data (Sami, Himanshu) |
+| Day 1 | React scaffold + routing + CSS setup (Jatin, Ayush) |
+| Day 2 | Profile form + course list rendering (Jatin, Ayush) |
+| Day 2 | Recommender logic + prerequisite check (Sami, Himanshu) |
+| Day 3 | Progress tracking + learning path UI (All) |
+| Day 3 | Test 2 profiles + polish + demo (All) |
+
+---
+
+## 🤝 Contributing
+
+This is a college hackathon project. Internal workflow:
+1. Pull latest `main`.
+2. Create a branch: `feat/<feature>` or `fix/<bug>`.
+3. Commit with clear messages.
+4. Open PR → 1 reviewer → merge.
+
+---
+
+## 📄 License
+
+MIT License — free to use for learning and academic purposes.
+
+---
+
+## 💡 Future Ideas
+
+- Supabase Auth for multi-user accounts
+- Course ratings from peers
+- AI-generated learning path explanations
+- Export path as PDF
+- Mobile-first PWA
+
+---
+
+> Built with ❤️ by **F-Society** — Sami, Jatin, Himanshu, Ayush.
