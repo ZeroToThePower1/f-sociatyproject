@@ -32,7 +32,7 @@
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| Frontend | **React (Vite)** | UI, routing, state management |
+| Frontend | **React (Create React App)** | UI, routing, state management |
 | Styling | **CSS** | Custom, responsive UI |
 | Backend / DB | **Supabase** | Postgres DB, Auth (optional), REST API |
 | State / Data | **Supabase JS Client** | Query courses, save progress |
@@ -57,8 +57,9 @@
 
 ```
 coursecompass/
-├── frontend/                      # React app (Vite)
+├── client/                        # React app (Create React App)
 │   ├── public/
+│   │   └── index.html
 │   ├── src/
 │   │   ├── assets/
 │   │   ├── components/            # Reusable UI components
@@ -84,12 +85,10 @@ coursecompass/
 │   │   ├── context/
 │   │   │   └── StudentContext.jsx
 │   │   ├── App.jsx
-│   │   ├── main.jsx
+│   │   ├── index.js
 │   │   └── index.css
 │   ├── .env.local
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
+│   └── package.json
 │
 ├── backend/                       # Supabase logic (SQL + Edge Functions optional)
 │   ├── supabase/
@@ -230,20 +229,27 @@ cd coursecompass
 ```
 
 ### 2. Frontend setup
+
+The React app was created with:
 ```bash
-cd frontend
+npx create-react-app@latest client
+```
+
+To install its dependencies:
+```bash
+cd client
 npm install
 ```
 
 Create `.env.local`:
 ```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
+REACT_APP_SUPABASE_URL=https://your-project.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 Run:
 ```bash
-npm run dev
+npm start
 ```
 
 ### 3. Supabase setup
@@ -292,10 +298,9 @@ Includes at least **one prerequisite chain** (e.g. *JavaScript → React*).
 
 | Command | What it does |
 |---------|--------------|
-| `npm run dev` | Start dev server |
+| `npm start` | Start dev server |
 | `npm run build` | Production build |
-| `npm run preview` | Preview build |
-| `npm run lint` | Lint code |
+| `npm test` | Run tests |
 
 ---
 
