@@ -93,3 +93,8 @@ body { background: var(--bg-app); margin: 0; color: var(--secondary); }
   background: var(--primary-light);
   color: var(--primary);
 }
+
+.nav-link.active {
+  background: var(--primary-light);
+  color: var(--primary);
+}
